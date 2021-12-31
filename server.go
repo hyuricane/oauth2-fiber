@@ -69,10 +69,7 @@ func (s *Server) redirect(c *fiber.Ctx, req *AuthorizeRequest, data map[string]i
 	if err != nil {
 		return err
 	}
-
-	c.Set("Location", uri)
-	c.Status(302)
-	return nil
+	return c.Redirect(uri, 302)
 }
 
 func (s *Server) tokenError(c *fiber.Ctx, err error) error {
