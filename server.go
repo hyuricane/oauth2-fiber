@@ -157,6 +157,9 @@ func (s *Server) CheckCodeChallengeMethod(ccm oauth2.CodeChallengeMethod) bool {
 // ValidationAuthorizeRequest the authorization request validation
 func (s *Server) ValidationAuthorizeRequest(c *fiber.Ctx) (*AuthorizeRequest, error) {
 	redirectURI := c.FormValue("redirect_uri")
+	if redirectURI != "" {
+		redirectURI, _ = url.QueryUnescape(redirectURI)
+	}
 	clientID := c.FormValue("client_id")
 	if !(c.Method() == "GET" || c.Method() == "POST") ||
 		clientID == "" {
