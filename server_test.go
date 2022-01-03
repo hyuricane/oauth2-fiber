@@ -1,11 +1,13 @@
 package oauth2fiber_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 
 	"github.com/gavv/httpexpect"
@@ -32,13 +34,45 @@ var (
 	s256ChallengeHash = "W6YWc_4yHwYN-cGDgGmOMHF3l7KDy7VcRjf7q2FVF-o="
 )
 
+type TestStore struct {
+	oauth2.ClientStore
+	sync.RWMutex
+	clients map[string]oauth2.ClientInfo
+}
+
+// testStore constructor
+func NewTestStore() *TestStore {
+	return &TestStore{
+		clients: make(map[string]oauth2.ClientInfo),
+	}
+}
+
+// implement testStore
+func (s *TestStore) GetByID(ctx context.Context, id string) (oauth2.ClientInfo, error) {
+	s.RLock()
+	defer s.RUnlock()
+
+	if c, ok := s.clients[id]; ok {
+		return c, nil
+	}
+	return nil, nil
+}
+
+func (s *TestStore) Set(id string, cli oauth2.ClientInfo) (err error) {
+	s.Lock()
+	defer s.Unlock()
+
+	s.clients[id] = cli
+	return
+}
+
 func init() {
 	manager = manage.NewDefaultManager()
 	manager.MustTokenStorage(store.NewMemoryTokenStore())
 }
 
 func clientStore(domain string) oauth2.ClientStore {
-	clientStore := store.NewClientStore()
+	clientStore := NewTestStore()
 	clientStore.Set(clientID, &models.Client{
 		ID:     clientID,
 		Secret: clientSecret,
@@ -150,8 +184,8 @@ func TestAuthorizeCodeWithChallengePlain(t *testing.T) {
 				WithFormField("grant_type", "authorization_code").
 				WithFormField("client_id", clientID).
 				WithFormField("code", code).
-				WithHeader("X-DEBUG", "token").
-				WithBasicAuth("code_verifier", "testchallenge").
+				WithFormField("code_verifier", plainChallenge).
+				WithBasicAuth(clientID, clientSecret).
 				Expect().
 				Status(http.StatusOK).
 				JSON().Object()
@@ -203,7 +237,8 @@ func TestAuthorizeCodeWithChallengeS256(t *testing.T) {
 				WithFormField("grant_type", "authorization_code").
 				WithFormField("client_id", clientID).
 				WithFormField("code", code).
-				WithBasicAuth("code_verifier", s256Challenge).
+				WithFormField("code_verifier", s256Challenge).
+				WithBasicAuth(clientID, clientSecret).
 				Expect().
 				Status(http.StatusOK).
 				JSON().Object()
