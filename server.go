@@ -153,24 +153,24 @@ func (s *Server) CheckCodeChallengeMethod(ccm oauth2.CodeChallengeMethod) bool {
 
 // ValidationAuthorizeRequest the authorization request validation
 func (s *Server) ValidationAuthorizeRequest(c *fiber.Ctx) (*AuthorizeRequest, error) {
-	redirectURI := c.FormValue("redirect_uri")
+	redirectURI := c.FormValue("redirect_uri", c.Query("redirect_uri"))
 	if redirectURI != "" {
 		redirectURI, _ = url.QueryUnescape(redirectURI)
 	}
-	clientID := c.FormValue("client_id")
+	clientID := c.FormValue("client_id", c.Query("client_id"))
 	if !(c.Method() == "GET" || c.Method() == "POST") ||
 		clientID == "" {
 		return nil, errors.ErrInvalidRequest
 	}
 
-	resType := oauth2.ResponseType(c.FormValue("response_type"))
+	resType := oauth2.ResponseType(c.FormValue("response_type", c.Query("response_type")))
 	if resType.String() == "" {
 		return nil, errors.ErrUnsupportedResponseType
 	} else if allowed := s.CheckResponseType(resType); !allowed {
 		return nil, errors.ErrUnauthorizedClient
 	}
 
-	cc := c.FormValue("code_challenge")
+	cc := c.FormValue("code_challenge", c.Query("code_challenge"))
 	if cc == "" && s.Config.ForcePKCE {
 		return nil, errors.ErrCodeChallengeRquired
 	}
@@ -178,7 +178,7 @@ func (s *Server) ValidationAuthorizeRequest(c *fiber.Ctx) (*AuthorizeRequest, er
 		return nil, errors.ErrInvalidCodeChallengeLen
 	}
 
-	ccm := oauth2.CodeChallengeMethod(c.FormValue("code_challenge_method"))
+	ccm := oauth2.CodeChallengeMethod(c.FormValue("code_challenge_method", c.Query("code_challenge_method")))
 	// set default
 	if ccm == "" {
 		ccm = oauth2.CodeChallengePlain
@@ -191,8 +191,8 @@ func (s *Server) ValidationAuthorizeRequest(c *fiber.Ctx) (*AuthorizeRequest, er
 		RedirectURI:         redirectURI,
 		ResponseType:        resType,
 		ClientID:            clientID,
-		State:               c.FormValue("state"),
-		Scope:               c.FormValue("scope"),
+		State:               c.FormValue("state", c.Query("state")),
+		Scope:               c.FormValue("scope", c.Query("scope")),
 		Ctx:                 c,
 		CodeChallenge:       cc,
 		CodeChallengeMethod: ccm,
