@@ -56,15 +56,15 @@ type Server struct {
 	ResponseTokenHandler         ResponseTokenHandler
 }
 
-func (s *Server) redirectError(c *fiber.Ctx, req *AuthorizeRequest, err error) error {
+func (s *Server) RedirectError(c *fiber.Ctx, req *AuthorizeRequest, err error) error {
 	if req == nil {
 		return err
 	}
 	data, _, _ := s.GetErrorData(err)
-	return s.redirect(c, req, data)
+	return s.Redirect(c, req, data)
 }
 
-func (s *Server) redirect(c *fiber.Ctx, req *AuthorizeRequest, data map[string]interface{}) error {
+func (s *Server) Redirect(c *fiber.Ctx, req *AuthorizeRequest, data map[string]interface{}) error {
 	uri, err := s.GetRedirectURI(req, data)
 	if err != nil {
 		return err
@@ -252,21 +252,22 @@ func (s *Server) GetAuthorizeData(rt oauth2.ResponseType, ti oauth2.TokenInfo) m
 	return s.GetTokenData(ti)
 }
 
-// HandleAuthorizeRequest the authorization request handling
-func (s *Server) HandleAuthorizeRequest(c *fiber.Ctx) error {
+// HandleAuthorizeRequest handle the authorization request
+// return return authorization request struct and data to be redirected back at redirect_uri
+func (s *Server) HandleAuthorizeRequest(c *fiber.Ctx) (req *AuthorizeRequest, data map[string]interface{}, err error) {
 	ctx := c.Context()
 
-	req, err := s.ValidationAuthorizeRequest(c)
+	req, err = s.ValidationAuthorizeRequest(c)
 	if err != nil {
-		return s.redirectError(c, req, err)
+		return
 	}
 
 	// user authorization
 	userID, err := s.UserAuthorizationHandler(c)
 	if err != nil {
-		return s.redirectError(c, req, err)
+		return
 	} else if userID == "" {
-		return nil
+		return
 	}
 	req.UserID = userID
 
@@ -274,7 +275,7 @@ func (s *Server) HandleAuthorizeRequest(c *fiber.Ctx) error {
 	if fn := s.AuthorizeScopeHandler; fn != nil {
 		scope, err := fn(c)
 		if err != nil {
-			return err
+			return req, nil, err
 		} else if scope != "" {
 			req.Scope = scope
 		}
@@ -284,26 +285,27 @@ func (s *Server) HandleAuthorizeRequest(c *fiber.Ctx) error {
 	if fn := s.AccessTokenExpHandler; fn != nil {
 		exp, err := fn(c)
 		if err != nil {
-			return err
+			return req, nil, err
 		}
 		req.AccessTokenExp = exp
 	}
 
 	ti, err := s.GetAuthorizeToken(ctx, req)
 	if err != nil {
-		return s.redirectError(c, req, err)
+		return req, nil, err
 	}
 
 	// If the redirect URI is empty, the default domain provided by the client is used.
 	if req.RedirectURI == "" {
 		client, err := s.Manager.GetClient(ctx, req.ClientID)
 		if err != nil {
-			return err
+			return req, nil, err
 		}
 		req.RedirectURI = client.GetDomain()
 	}
 
-	return s.redirect(c, req, s.GetAuthorizeData(req.ResponseType, ti))
+	data = s.GetAuthorizeData(req.ResponseType, ti)
+	return
 }
 
 // ValidationTokenRequest the token request validation

@@ -84,7 +84,16 @@ func clientStore(domain string) oauth2.ClientStore {
 func testServer(t *testing.T, rw http.ResponseWriter, r *http.Request) {
 	app := fiber.New()
 	defer app.Shutdown()
-	app.Use("/authorize", srv.HandleAuthorizeRequest)
+	app.Use("/authorize", func(c *fiber.Ctx) error {
+		if req, data, err := srv.HandleAuthorizeRequest(c); err != nil {
+			if req.RedirectURI != "" {
+				return srv.RedirectError(c, req, err)
+			}
+			return err
+		} else {
+			return srv.Redirect(c, req, data)
+		}
+	})
 	app.Use("/token", srv.HandleTokenRequest)
 	var err error
 	var resp *http.Response
