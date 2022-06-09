@@ -25,7 +25,7 @@ func NewServer(cfg *Config, manager oauth2.Manager) *Server {
 	}
 
 	// default handler
-	srv.ClientInfoHandler = ClientBasicHandler
+	srv.ClientInfoHandler = ClientAuthParser
 
 	srv.UserAuthorizationHandler = func(c *fiber.Ctx) (string, error) {
 		return "", errors.ErrAccessDenied
@@ -35,6 +35,14 @@ func NewServer(cfg *Config, manager oauth2.Manager) *Server {
 		return "", errors.ErrAccessDenied
 	}
 	return srv
+}
+
+func ClientAuthParser(c *fiber.Ctx) (string, string, error) {
+	auth := c.Get("Authorization")
+	if auth == "" {
+		return ClientFormHandler(c)
+	}
+	return ClientBasicHandler(c)
 }
 
 // Server Provide authorization server
