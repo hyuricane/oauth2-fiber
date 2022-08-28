@@ -2,6 +2,7 @@ package oauth2fiber
 
 import (
 	// "net/http"
+
 	"encoding/base64"
 	"strings"
 	"time"
@@ -52,14 +53,21 @@ type (
 	ResponseTokenHandler func(c *fiber.Ctx, data map[string]interface{}, header map[string][]string, statusCode ...int) error
 )
 
+type _ClientForm struct {
+	ClientID     string `json:"client_id" form:"client_id"`
+	ClientSecret string `json:"client_secret" form:"client_secret"`
+}
+
 // ClientFormHandler get client data from form
 func ClientFormHandler(c *fiber.Ctx) (string, string, error) {
-	clientID := c.FormValue("client_id")
-	if clientID == "" {
+	client := new(_ClientForm)
+	if err := c.BodyParser(client); err != nil {
+		return "", "", err
+	}
+	if client.ClientID == "" {
 		return "", "", errors.ErrInvalidClient
 	}
-	clientSecret := c.FormValue("client_secret")
-	return clientID, clientSecret, nil
+	return client.ClientID, client.ClientSecret, nil
 }
 
 func ClientBasicHandler(c *fiber.Ctx) (string, string, error) {

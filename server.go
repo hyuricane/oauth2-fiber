@@ -316,15 +316,31 @@ func (s *Server) HandleAuthorizeRequest(c *fiber.Ctx) (req *AuthorizeRequest, da
 	return
 }
 
+type _TokenRequestBody struct {
+	GrantType    oauth2.GrantType `json:"grant_type" form:"grant_type"`
+	ClientID     string           `json:"client_id" form:"client_id"`
+	ClientSecret string           `json:"client_secret" form:"client_secret"`
+	RedirectURI  string           `json:"redirect_uri" form:"redirect_uri"`
+	Code         string           `json:"code" form:"code"`
+	CodeVerifier string           `json:"code_verifier" form:"code_verifier"`
+	Scope        string           `json:"scope" form:"scope"`
+	Username     string           `json:"username" form:"username"`
+	Password     string           `json:"password" form:"password"`
+	RefreshToken string           `json:"refresh_token" form:"refresh_token"`
+}
+
 // ValidationTokenRequest the token request validation
 func (s *Server) ValidationTokenRequest(c *fiber.Ctx) (oauth2.GrantType, *oauth2.TokenGenerateRequest, error) {
 	if v := c.Method(); !(v == "POST" ||
 		(s.Config.AllowGetAccessRequest && v == "GET")) {
 		return "", nil, errors.ErrInvalidRequest
 	}
+	rb := new(_TokenRequestBody)
+	if err := c.BodyParser(rb); err != nil {
+		return "", nil, errors.ErrInvalidRequest
+	}
 
-	gt := oauth2.GrantType(c.FormValue("grant_type"))
-	if gt.String() == "" {
+	if rb.GrantType.String() == "" {
 		return "", nil, errors.ErrUnsupportedGrantType
 	}
 
@@ -339,21 +355,21 @@ func (s *Server) ValidationTokenRequest(c *fiber.Ctx) (oauth2.GrantType, *oauth2
 		// Request:      r,
 	}
 
-	switch gt {
+	switch rb.GrantType {
 	case oauth2.AuthorizationCode:
-		tgr.RedirectURI = c.FormValue("redirect_uri")
-		tgr.Code = c.FormValue("code")
+		tgr.RedirectURI = rb.RedirectURI
+		tgr.Code = rb.Code
 		if tgr.RedirectURI == "" ||
 			tgr.Code == "" {
 			return "", nil, errors.ErrInvalidRequest
 		}
-		tgr.CodeVerifier = c.FormValue("code_verifier")
+		tgr.CodeVerifier = rb.CodeVerifier
 		if s.Config.ForcePKCE && tgr.CodeVerifier == "" {
 			return "", nil, errors.ErrInvalidRequest
 		}
 	case oauth2.PasswordCredentials:
-		tgr.Scope = c.FormValue("scope")
-		username, password := c.FormValue("username"), c.FormValue("password")
+		tgr.Scope = rb.Scope
+		username, password := rb.Username, rb.Password
 		if username == "" || password == "" {
 			return "", nil, errors.ErrInvalidRequest
 		}
@@ -366,15 +382,15 @@ func (s *Server) ValidationTokenRequest(c *fiber.Ctx) (oauth2.GrantType, *oauth2
 		}
 		tgr.UserID = userID
 	case oauth2.ClientCredentials:
-		tgr.Scope = c.FormValue("scope")
+		tgr.Scope = rb.Scope
 	case oauth2.Refreshing:
-		tgr.Refresh = c.FormValue("refresh_token")
-		tgr.Scope = c.FormValue("scope")
+		tgr.Refresh = rb.RefreshToken
+		tgr.Scope = rb.Scope
 		if tgr.Refresh == "" {
 			return "", nil, errors.ErrInvalidRequest
 		}
 	}
-	return gt, tgr, nil
+	return rb.GrantType, tgr, nil
 }
 
 // CheckGrantType check allows grant type
