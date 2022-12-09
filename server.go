@@ -31,7 +31,7 @@ func NewServer(cfg *Config, manager oauth2.Manager) *Server {
 		return "", errors.ErrAccessDenied
 	}
 
-	srv.PasswordAuthorizationHandler = func(username, password string) (string, error) {
+	srv.PasswordAuthorizationHandler = func(username, password string, clientId ...string) (string, error) {
 		return "", errors.ErrAccessDenied
 	}
 	return srv
@@ -62,6 +62,17 @@ type Server struct {
 	AccessTokenExpHandler        AccessTokenExpHandler
 	AuthorizeScopeHandler        AuthorizeScopeHandler
 	ResponseTokenHandler         ResponseTokenHandler
+}
+
+type Oauth2Param struct {
+	ClientID            string                     `query:"client_id" json:"client_id" form:"client_id"`
+	ResponseType        oauth2.ResponseType        `query:"response_type" json:"response_type" form:"response_type"`
+	RedirectUri         string                     `query:"redirect_uri" json:"redirect_uri" form:"redirect_uri"`
+	CodeChallenge       string                     `query:"code_challenge" json:"code_challenge" form:"code_challenge"`
+	CodeChallengeMethod oauth2.CodeChallengeMethod `query:"code_challenge_method" json:"code_challenge_method" form:"code_challenge_method"`
+	Scope               string                     `query:"scope" json:"scope" form:"scope"`
+	State               string                     `query:"state" json:"state" form:"state"`
+	AccessToken         string                     `query:"access_token" json:"access_token" form:"access_token"`
 }
 
 func (s *Server) RedirectError(c *fiber.Ctx, req *AuthorizeRequest, err error) error {
@@ -161,24 +172,27 @@ func (s *Server) CheckCodeChallengeMethod(ccm oauth2.CodeChallengeMethod) bool {
 
 // ValidationAuthorizeRequest the authorization request validation
 func (s *Server) ValidationAuthorizeRequest(c *fiber.Ctx) (*AuthorizeRequest, error) {
-	redirectURI := c.FormValue("redirect_uri", c.Query("redirect_uri"))
+	oauthParam := &Oauth2Param{}
+	c.QueryParser(oauthParam)
+	c.BodyParser(oauthParam)
+	redirectURI := oauthParam.RedirectUri
 	if redirectURI != "" {
 		redirectURI, _ = url.QueryUnescape(redirectURI)
 	}
-	clientID := c.FormValue("client_id", c.Query("client_id"))
+	clientID := oauthParam.ClientID
 	if !(c.Method() == "GET" || c.Method() == "POST") ||
 		clientID == "" {
 		return nil, errors.ErrInvalidRequest
 	}
 
-	resType := oauth2.ResponseType(c.FormValue("response_type", c.Query("response_type")))
+	resType := oauthParam.ResponseType
 	if resType.String() == "" {
 		return nil, errors.ErrUnsupportedResponseType
 	} else if allowed := s.CheckResponseType(resType); !allowed {
 		return nil, errors.ErrUnauthorizedClient
 	}
 
-	cc := c.FormValue("code_challenge", c.Query("code_challenge"))
+	cc := oauthParam.CodeChallenge
 	if cc == "" && s.Config.ForcePKCE {
 		return nil, errors.ErrCodeChallengeRquired
 	}
@@ -186,7 +200,7 @@ func (s *Server) ValidationAuthorizeRequest(c *fiber.Ctx) (*AuthorizeRequest, er
 		return nil, errors.ErrInvalidCodeChallengeLen
 	}
 
-	ccm := oauth2.CodeChallengeMethod(c.FormValue("code_challenge_method", c.Query("code_challenge_method")))
+	ccm := oauthParam.CodeChallengeMethod
 	// set default
 	if ccm == "" {
 		ccm = oauth2.CodeChallengePlain
@@ -199,8 +213,8 @@ func (s *Server) ValidationAuthorizeRequest(c *fiber.Ctx) (*AuthorizeRequest, er
 		RedirectURI:         redirectURI,
 		ResponseType:        resType,
 		ClientID:            clientID,
-		State:               c.FormValue("state", c.Query("state")),
-		Scope:               c.FormValue("scope", c.Query("scope")),
+		State:               oauthParam.State,
+		Scope:               oauthParam.Scope,
 		Ctx:                 c,
 		CodeChallenge:       cc,
 		CodeChallengeMethod: ccm,
@@ -374,7 +388,7 @@ func (s *Server) ValidationTokenRequest(c *fiber.Ctx) (oauth2.GrantType, *oauth2
 			return "", nil, errors.ErrInvalidRequest
 		}
 
-		userID, err := s.PasswordAuthorizationHandler(username, password)
+		userID, err := s.PasswordAuthorizationHandler(username, password, clientID)
 		if err != nil {
 			return "", nil, err
 		} else if userID == "" {
@@ -594,7 +608,10 @@ func (s *Server) BearerAuth(c *fiber.Ctx) (string, bool) {
 	if auth != "" && strings.HasPrefix(auth, prefix) {
 		token = auth[len(prefix):]
 	} else {
-		token = c.FormValue("access_token")
+		param := &Oauth2Param{}
+		if err := c.BodyParser(param); err != nil {
+			token = param.AccessToken
+		}
 	}
 
 	return token, token != ""

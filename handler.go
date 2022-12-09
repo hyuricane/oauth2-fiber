@@ -26,7 +26,7 @@ type (
 	UserAuthorizationHandler func(c *fiber.Ctx) (userID string, err error)
 
 	// PasswordAuthorizationHandler get user id from username and password
-	PasswordAuthorizationHandler func(username, password string) (userID string, err error)
+	PasswordAuthorizationHandler func(username string, password string, clientId ...string) (userID string, err error)
 
 	// RefreshingScopeHandler check the scope of the refreshing token
 	RefreshingScopeHandler func(tgr *oauth2.TokenGenerateRequest, oldScope string) (allowed bool, err error)

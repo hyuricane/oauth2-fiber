@@ -312,7 +312,7 @@ func TestPasswordCredentials(t *testing.T) {
 
 	manager.MapClientStorage(clientStore(""))
 	srv = oauth2fiber.NewDefaultServer(manager)
-	srv.SetPasswordAuthorizationHandler(func(username, password string) (userID string, err error) {
+	srv.SetPasswordAuthorizationHandler(func(username, password string, clientId ...string) (userID string, err error) {
 		if username == "admin" && password == "123456" {
 			userID = "000000"
 			return
